@@ -3,55 +3,65 @@ def build_question_prompt(
     difficulty: str,
     topic: str | None = None,
     content: str | None = None,
-    keywords: list[str] | None = None
+    keywords: list[str] | None = None,
+    question_type: str = "descriptive"
 ) -> str:
 
-    # ---------------- KEYWORD MODE ----------------
-    if keywords:
-        keyword_list = "\n".join(f"- {k}" for k in keywords)
-
-        return f"""
-You are an expert university-level exam question setter.
-
-Generate EXACTLY {num_questions} {difficulty}-level exam question(s)
-STRICTLY based on EACH keyword below.
-
-KEYWORDS:
-{keyword_list}
-
-RULES:
-- Questions must focus ONLY on the given keyword(s)
-- Do NOT mix multiple keywords in one question
-- Output ONLY the questions
-- Number the questions clearly (1., 2., 3., ...)
-- Do NOT include answers or explanations
-"""
-
-    # ---------------- CONTENT MODE ----------------
+    base_context = ""
+    if topic:
+        base_context += f"\nTOPIC: {topic}"
     if content:
+        base_context += f"\nCONTENT:\n{content}"
+    if keywords:
+        base_context += f"\nFOCUS KEYWORDS: {', '.join(keywords)}"
+
+    # ================= DESCRIPTIVE WITH MODEL ANSWERS =================
+    if question_type == "descriptive":
         return f"""
-Generate exactly {num_questions} {difficulty}-level exam questions
-STRICTLY based on the following content.
+You are an experienced university examiner.
 
-CONTENT:
-{content}
+Generate EXACTLY {num_questions} {difficulty}-level DESCRIPTIVE questions.
 
-RULES:
-- Output ONLY the questions
-- Number the questions clearly (1., 2., 3., ...)
-- Do NOT include answers or explanations
+{base_context}
+
+For EACH question, generate:
+1. A concise model answer (3–4 lines)
+2. 4–6 key points (bullet-style)
+3. 5–8 expected keywords
+
+Output MUST be VALID JSON ARRAY ONLY.
+
+JSON FORMAT:
+[
+  {{
+    "question": "...",
+    "model_answer": "...",
+    "key_points": ["...", "..."],
+    "expected_keywords": ["...", "..."]
+  }}
+]
 """
 
-    # ---------------- TOPIC MODE ----------------
+    # ================= MCQ =================
     return f"""
-Generate exactly {num_questions} {difficulty}-level exam questions
-on the following topic.
+You are an expert university exam question setter.
 
-TOPIC:
-{topic}
+Generate EXACTLY {num_questions} {difficulty}-level MCQs.
+
+{base_context}
 
 RULES:
-- Output ONLY the questions
-- Number the questions clearly (1., 2., 3., ...)
-- Do NOT include answers or explanations
+- Each question MUST have exactly 4 options
+- Options MUST NOT be prefixed with letters
+- EXACTLY ONE option must be correct
+- Output MUST be VALID JSON ARRAY ONLY
+
+JSON FORMAT:
+[
+  {{
+    "question": "...",
+    "options": ["...", "...", "...", "..."],
+    "correct_answer": "..."
+  }}
+]
 """

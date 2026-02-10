@@ -4,17 +4,56 @@ from docx import Document
 from io import BytesIO
 
 # -------------------------------------------------
-# Helper: Create Word document
+# Helper: Create Question Paper Word file
 # -------------------------------------------------
-def create_word_file(questions):
+def create_question_file(questions, question_type):
     doc = Document()
-    doc.add_heading("Generated Questions", level=1)
+    doc.add_heading("Question Paper", level=1)
+
     for i, q in enumerate(questions, 1):
-        doc.add_paragraph(f"Q{i}. {q}")
+        if question_type == "mcq":
+            doc.add_paragraph(f"Q{i}. {q['question']}")
+            options = ["A", "B", "C", "D"]
+            for idx, opt in enumerate(q["options"]):
+                doc.add_paragraph(f"{options[idx]}. {opt}")
+            doc.add_paragraph("")
+        else:
+            doc.add_paragraph(f"Q{i}. {q['question']}")
+
     buffer = BytesIO()
     doc.save(buffer)
     buffer.seek(0)
     return buffer
+
+
+# -------------------------------------------------
+# Helper: Create Answer Key Word file
+# -------------------------------------------------
+def create_answer_file(questions, question_type):
+    doc = Document()
+    doc.add_heading("Answer Key", level=1)
+
+    for i, q in enumerate(questions, 1):
+        doc.add_paragraph(f"Q{i}. {q['question']}")
+
+        if question_type == "mcq":
+            doc.add_paragraph(f"Correct Answer: {q['correct_answer']}")
+        else:
+            doc.add_paragraph(f"Model Answer:\n{q['model_answer']}")
+            doc.add_paragraph("Key Points:")
+            for kp in q["key_points"]:
+                doc.add_paragraph(f"- {kp}")
+            doc.add_paragraph(
+                "Expected Keywords: " + ", ".join(q["expected_keywords"])
+            )
+
+        doc.add_paragraph("")
+
+    buffer = BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    return buffer
+
 
 
 TEXT_API = "http://127.0.0.1:8000/generate-questions"
@@ -45,7 +84,6 @@ with tab1:
 
     keywords_input = st.text_input(
         "Keywords (optional, comma-separated)",
-        placeholder="e.g. Deadlock, Starvation, Mutual Exclusion",
         key="text_keywords"
     )
 
@@ -66,18 +104,27 @@ with tab1:
         key="text_difficulty"
     )
 
+    question_type = st.radio(
+        "Question Type",
+        ["descriptive", "mcq"],
+        horizontal=True,
+        key="text_question_type"
+    )
+
     if st.button("Generate Questions", key="text_generate_btn"):
         payload = {
             "topic": topic,
             "content": content,
             "keywords": keywords,
             "num_questions": num_questions,
-            "difficulty": difficulty
+            "difficulty": difficulty,
+            "question_type": question_type
         }
 
         res = requests.post(TEXT_API, json=payload)
         if res.status_code == 200:
             st.session_state["questions"] = res.json()["questions"]
+            st.session_state["question_type"] = question_type
         else:
             st.error(res.text)
 
@@ -92,16 +139,6 @@ with tab2:
         key="pdf_uploader"
     )
 
-    pdf_keywords_input = st.text_input(
-        "Keywords (optional, comma-separated)",
-        key="pdf_keywords"
-    )
-
-    pdf_keywords = (
-        [k.strip() for k in pdf_keywords_input.split(",") if k.strip()]
-        if pdf_keywords_input else None
-    )
-
     pdf_num_questions = st.number_input(
         "Number of Questions",
         1, 50, 10,
@@ -114,6 +151,13 @@ with tab2:
         key="pdf_difficulty"
     )
 
+    pdf_question_type = st.radio(
+        "Question Type",
+        ["descriptive", "mcq"],
+        horizontal=True,
+        key="pdf_question_type"
+    )
+
     if uploaded_pdf and st.button("Generate Questions", key="pdf_generate_btn"):
         files = {
             "file": (uploaded_pdf.name, uploaded_pdf.getvalue(), "application/pdf")
@@ -121,15 +165,14 @@ with tab2:
 
         params = {
             "num_questions": pdf_num_questions,
-            "difficulty": pdf_difficulty
+            "difficulty": pdf_difficulty,
+            "question_type": pdf_question_type
         }
-
-        if pdf_keywords:
-            params["keywords"] = pdf_keywords
 
         res = requests.post(PDF_API, files=files, params=params)
         if res.status_code == 200:
             st.session_state["questions"] = res.json()["questions"]
+            st.session_state["question_type"] = pdf_question_type
         else:
             st.error(res.text)
 
@@ -139,11 +182,36 @@ with tab2:
 # =================================================
 if "questions" in st.session_state:
     st.subheader("Generated Questions")
-    for i, q in enumerate(st.session_state["questions"], 1):
-        st.write(f"**Q{i}.** {q}")
 
-    st.download_button(
-        "📄 Download as Word",
-        create_word_file(st.session_state["questions"]),
-        "generated_questions.docx"
-    )
+    qtype = st.session_state.get("question_type", "descriptive")
+
+    for i, q in enumerate(st.session_state["questions"], 1):
+        if qtype == "mcq":
+            st.write(f"**Q{i}. {q['question']}**")
+            options = ["A", "B", "C", "D"]
+            for idx, opt in enumerate(q["options"]):
+                st.write(f"{options[idx]}. {opt}")
+        else:
+            st.write(f"**Q{i}. {q['question']}**")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.download_button(
+            "📄 Download Question Paper",
+            create_question_file(
+                st.session_state["questions"],
+                qtype
+            ),
+            "generated_questions.docx"
+        )
+
+    with col2:
+        st.download_button(
+            "📘 Download Answers",
+            create_answer_file(
+                st.session_state["questions"],
+                qtype
+            ),
+            "answer_key.docx"
+        )

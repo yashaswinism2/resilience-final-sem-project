@@ -4,137 +4,96 @@ from backend.app.core.prompt_builder import build_question_prompt
 from backend.app.services.llm_client import generate_questions
 from backend.app.utils.pdf_utils import extract_text_from_pdf
 from backend.app.utils.text_chunker import chunk_text
-import re
+import json
 
 router = APIRouter()
 
 
-# -------------------------------------------------
-# Helper: distribute questions across keywords
-# -------------------------------------------------
-def distribute_questions(keywords: list[str], total: int) -> dict[str, int]:
-    base = total // len(keywords)
-    remainder = total % len(keywords)
+def safe_json_loads(raw: str):
+    if not raw or not raw.strip():
+        raise ValueError("LLM returned empty response")
 
-    distribution = {}
-    for i, kw in enumerate(keywords):
-        distribution[kw] = base + (1 if i < remainder else 0)
+    raw = raw.strip()
 
-    return distribution
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+
+    start = raw.find("[")
+    end = raw.rfind("]")
+
+    if start == -1 or end == -1:
+        raise ValueError("No JSON array found in LLM response")
+
+    return json.loads(raw[start:end + 1])
 
 
 # =================================================
-# TEXT / TOPIC / CONTENT BASED
+# TEXT / CONTENT / TOPIC
 # =================================================
 @router.post("/generate-questions", response_model=QuestionResponse)
 def generate(req: QuestionRequest):
 
     if not (req.topic or req.content or req.keywords):
-        raise HTTPException(
-            status_code=400,
-            detail="Topic, content, or keywords must be provided"
-        )
+        raise HTTPException(400, "Input required")
 
-    questions = []
-
-    # -------- KEYWORD DISTRIBUTION MODE --------
-    if req.keywords:
-        distribution = distribute_questions(req.keywords, req.num_questions)
-
-        for keyword, count in distribution.items():
-            prompt = build_question_prompt(
-                num_questions=count,
-                difficulty=req.difficulty,
-                topic=req.topic,
-                content=req.content,
-                keywords=[keyword]
-            )
-
-            raw_output = generate_questions(prompt)
-
-            for line in raw_output.split("\n"):
-                match = re.match(r"^\d+[\).\s]+(.*)", line.strip())
-                if match:
-                    questions.append(match.group(1).strip())
-
-        return {"questions": questions[:req.num_questions]}
-
-    # -------- NORMAL MODE (NO KEYWORDS) --------
     prompt = build_question_prompt(
         num_questions=req.num_questions,
         difficulty=req.difficulty,
         topic=req.topic,
-        content=req.content
+        content=req.content,
+        keywords=req.keywords,
+        question_type=req.question_type
     )
 
-    raw_output = generate_questions(prompt)
+    raw = generate_questions(prompt)
+    print("\n--- RAW LLM OUTPUT ---\n", raw, "\n---------------------\n")
 
-    for line in raw_output.split("\n"):
-        match = re.match(r"^\d+[\).\s]+(.*)", line.strip())
-        if match:
-            questions.append(match.group(1).strip())
+    try:
+        questions = safe_json_loads(raw)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to parse LLM output: {str(e)}"
+        )
 
-    return {"questions": questions[:req.num_questions]}
+    return {"questions": questions}
 
 
-# =================================================
-# PDF BASED
-# =================================================
+# PDF
 @router.post("/generate-questions-from-pdf", response_model=QuestionResponse)
 async def generate_from_pdf(
     file: UploadFile = File(...),
     num_questions: int = 10,
     difficulty: str = "medium",
-    keywords: list[str] | None = None
+    question_type: str = "descriptive"
 ):
+
     if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+        raise HTTPException(400, "Only PDF files allowed")
 
-    pdf_bytes = await file.read()
-    text = extract_text_from_pdf(pdf_bytes)
-
-    if not text.strip():
-        raise HTTPException(status_code=400, detail="No readable text found")
+    text = extract_text_from_pdf(await file.read())
+    print("pdf chunks", text)
+    chunks = chunk_text(text)
 
     questions = []
-
-    # -------- KEYWORD DISTRIBUTION MODE --------
-    if keywords:
-        distribution = distribute_questions(keywords, num_questions)
-
-        for keyword, count in distribution.items():
-            prompt = build_question_prompt(
-                num_questions=count,
-                difficulty=difficulty,
-                content=text,
-                keywords=[keyword]
-            )
-
-            raw_output = generate_questions(prompt)
-
-            for line in raw_output.split("\n"):
-                match = re.match(r"^\d+[\).\s]+(.*)", line.strip())
-                if match:
-                    questions.append(match.group(1).strip())
-
-        return {"questions": questions[:num_questions]}
-
-    # -------- NORMAL PDF MODE --------
-    chunks = chunk_text(text)
+    per_chunk = max(1, num_questions // len(chunks))
 
     for chunk in chunks:
         prompt = build_question_prompt(
-            num_questions=num_questions,
+            num_questions=per_chunk,
             difficulty=difficulty,
-            content=chunk
+            content=chunk,
+            question_type=question_type
         )
 
-        raw_output = generate_questions(prompt)
+        raw = generate_questions(prompt)
+        print("\n--- RAW LLM OUTPUT ---\n", raw, "\n---------------------\n")
 
-        for line in raw_output.split("\n"):
-            match = re.match(r"^\d+[\).\s]+(.*)", line.strip())
-            if match:
-                questions.append(match.group(1).strip())
+        try:
+            parsed = safe_json_loads(raw)
+            questions.extend(parsed)
+        except Exception:
+            continue  # skip bad chunk output safely
 
         if len(questions) >= num_questions:
             break
