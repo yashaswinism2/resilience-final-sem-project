@@ -72,7 +72,7 @@ async def generate_from_pdf(
         raise HTTPException(400, "Only PDF files allowed")
 
     text = extract_text_from_pdf(await file.read())
-    print("pdf chunks", text)
+    #print("pdf chunks", text)
     chunks = chunk_text(text)
 
     questions = []
