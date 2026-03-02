@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+const BASE_URL = "https://resilience-final-sem-project.onrender.com";
+
 function App() {
   const [inputMode, setInputMode] = useState("topic");
   const [topic, setTopic] = useState("");
@@ -25,19 +27,16 @@ function App() {
         formData.append("difficulty", difficulty);
         formData.append("question_type", questionType);
 
-        console.log("This is the question type", questionType)
-        console.log("This is the PDF file ", pdfFile)
         response = await fetch(
-          "http://127.0.0.1:8000/generate-questions-from-pdf",
+          `${BASE_URL}/generate-questions-from-pdf`,
           {
             method: "POST",
             body: formData,
           }
         );
       } else {
-        console.log("This is the question type ",questionType)
         response = await fetch(
-          "http://127.0.0.1:8000/generate-questions",
+          `${BASE_URL}/generate-questions`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -56,9 +55,10 @@ function App() {
       }
 
       const data = await response.json();
-      setQuestions(data.questions);
+      setQuestions(data.questions || []);
     } catch (error) {
       console.error("Error:", error);
+      alert("Something went wrong. Please try again.");
     }
 
     setLoading(false);
@@ -71,7 +71,7 @@ function App() {
           Intelligent Question Generator
         </h1>
 
-        {/* INPUT MODE TOGGLE */}
+        {/* INPUT MODE */}
         <div className="mb-6">
           <label className="block mb-2 font-semibold text-gray-700">
             Input Mode
@@ -94,28 +94,28 @@ function App() {
           </div>
         </div>
 
-        {/* TOPIC MODE */}
+        {/* TOPIC */}
         {inputMode === "topic" && (
           <input
             type="text"
             placeholder="Enter topic"
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
-            className="w-full p-3 border rounded-lg mb-4 focus:ring-2 focus:ring-indigo-400"
+            className="w-full p-3 border rounded-lg mb-4"
           />
         )}
 
-        {/* CONTENT MODE */}
+        {/* CONTENT */}
         {inputMode === "content" && (
           <textarea
             placeholder="Paste study material..."
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            className="w-full p-3 border rounded-lg mb-4 h-40 focus:ring-2 focus:ring-indigo-400"
+            className="w-full p-3 border rounded-lg mb-4 h-40"
           />
         )}
 
-        {/* PDF MODE */}
+        {/* PDF */}
         {inputMode === "pdf" && (
           <input
             type="file"
@@ -165,7 +165,7 @@ function App() {
           </div>
         </div>
 
-        {/* NUMBER OF QUESTIONS */}
+        {/* NUMBER */}
         <div className="mb-4">
           <label className="block mb-1 font-semibold">
             Number of Questions
@@ -189,7 +189,7 @@ function App() {
           />
         )}
 
-        {/* GENERATE BUTTON */}
+        {/* BUTTON */}
         <button
           onClick={generateQuestions}
           className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 rounded-xl shadow-lg hover:scale-105 transition-all duration-200"
