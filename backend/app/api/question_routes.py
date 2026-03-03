@@ -1,9 +1,10 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File
-from backend.app.schemas.question_schema import QuestionRequest, QuestionResponse
-from backend.app.core.prompt_builder import build_question_prompt
-from backend.app.services.llm_client import generate_questions
-from backend.app.utils.pdf_utils import extract_text_from_pdf
-from backend.app.utils.text_chunker import chunk_text
+# from backend.app.schemas.question_schema import QuestionRequest, QuestionResponse
+from app.schemas.question_schema import QuestionRequest, QuestionResponse
+from app.core.prompt_builder import build_question_prompt
+from app.services.llm_client import generate_questions
+from app.utils.pdf_utils import extract_text_from_pdf
+from app.utils.text_chunker import chunk_text
 import json
 
 router = APIRouter()
