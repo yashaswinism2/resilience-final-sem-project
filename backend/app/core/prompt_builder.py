@@ -11,11 +11,21 @@ def build_question_prompt(
     if topic:
         base_context += f"\nTOPIC: {topic}"
     if content:
-        base_context += f"\nCONTENT:\n{content}"
+        base_context += f"\nCONTENT:\n{content[:1500]}"  # ✅ limit size
     if keywords:
         base_context += f"\nFOCUS KEYWORDS: {', '.join(keywords)}"
 
-    # ================= DESCRIPTIVE WITH MODEL ANSWERS =================
+    # 🔥 GLOBAL RULES (VERY IMPORTANT)
+    strict_rules = """
+IMPORTANT RULES:
+- Return ONLY a valid JSON array
+- Do NOT include ``` or markdown
+- Do NOT include explanation or text outside JSON
+- Ensure JSON is COMPLETE and NOT truncated
+- Ensure commas and brackets are correct
+"""
+
+    # ================= DESCRIPTIVE =================
     if question_type == "descriptive":
         return f"""
 You are an experienced university examiner.
@@ -24,20 +34,20 @@ Generate EXACTLY {num_questions} {difficulty}-level DESCRIPTIVE questions.
 
 {base_context}
 
-For EACH question, generate:
-1. A concise model answer (3–4 lines)
-2. 4–6 key points (bullet-style)
-3. 5–8 expected keywords
+For EACH question:
+- model_answer must be SHORT (2–3 lines only)
+- key_points must be 4–5 items
+- expected_keywords must be 5–6 words
 
-Output MUST be VALID JSON ARRAY ONLY.
+{strict_rules}
 
-JSON FORMAT:
+OUTPUT FORMAT:
 [
   {{
-    "question": "...",
-    "model_answer": "...",
-    "key_points": ["...", "..."],
-    "expected_keywords": ["...", "..."]
+    "question": "string",
+    "model_answer": "string",
+    "key_points": ["string"],
+    "expected_keywords": ["string"]
   }}
 ]
 """
@@ -52,16 +62,18 @@ Generate EXACTLY {num_questions} {difficulty}-level MCQs.
 
 RULES:
 - Each question MUST have exactly 4 options
-- Options MUST NOT be prefixed with letters
-- EXACTLY ONE option must be correct
-- Output MUST be VALID JSON ARRAY ONLY
+- Options MUST NOT be prefixed (no A/B/C/D)
+- EXACTLY ONE correct answer
+- Keep questions SHORT
 
-JSON FORMAT:
+{strict_rules}
+
+OUTPUT FORMAT:
 [
   {{
-    "question": "...",
-    "options": ["...", "...", "...", "..."],
-    "correct_answer": "..."
+    "question": "string",
+    "options": ["string", "string", "string", "string"],
+    "correct_answer": "string"
   }}
 ]
 """

@@ -2,9 +2,18 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-# from backend.app.api.question_routes import router as question_router
-from app.api.question_routes import router as question_router
+
+from backend.app.api.question_routes import router as question_router
+from backend.app.api.auth_routes import router as auth_router
+from backend.app.api.institute_routes import router as institute_router  # ✅ NEW
+
+# DATABASE IMPORTS
+from backend.app.db.database import Base, engine
+import backend.app.models 
 import os
+from backend.app.api.dashboard_routes import router as dashboard_router
+from backend.app.api.question_paper_routes import router as paper_router
+
 
 # -------------------------------------------------
 # Create FastAPI App
@@ -15,35 +24,46 @@ app = FastAPI(
 )
 
 # -------------------------------------------------
-# Enable CORS (Required for Vercel frontend)
+# CREATE DATABASE TABLES (IMPORTANT)
 # -------------------------------------------------
+
+Base.metadata.create_all(bind=engine)
+
+# -------------------------------------------------
+# CORS CONFIGURATION (IMPORTANT)
+# -------------------------------------------------
+
+origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://resilience-final-sem-project.onrender.com",
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # OK for learning; restrict in production
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # -------------------------------------------------
-# Include API routes
+# INCLUDE ROUTES
 # -------------------------------------------------
 
+app.include_router(auth_router)
 app.include_router(question_router)
+app.include_router(institute_router) 
+app.include_router(dashboard_router)
+app.include_router(paper_router)
 
 # -------------------------------------------------
-# Serve React Frontend (Production Build)
+# SERVE REACT FRONTEND (PRODUCTION BUILD)
 # -------------------------------------------------
 
-frontend_path = os.path.join(
-    os.path.dirname(__file__),
-    "..",
-    "..",
-    "frontend",
-    "dist"
+frontend_path = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist")
 )
-frontend_path = os.path.abspath(frontend_path)
 
 if os.path.exists(frontend_path):
 

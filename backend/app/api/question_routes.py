@@ -1,15 +1,19 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File
-# from backend.app.schemas.question_schema import QuestionRequest, QuestionResponse
-from app.schemas.question_schema import QuestionRequest, QuestionResponse
-from app.core.prompt_builder import build_question_prompt
-from app.services.llm_client import generate_questions
-from app.utils.pdf_utils import extract_text_from_pdf
-from app.utils.text_chunker import chunk_text
+from typing import Optional, List
 import json
+
+from backend.app.schemas.question_schema import QuestionRequest, QuestionResponse
+from backend.app.core.prompt_builder import build_question_prompt
+from backend.app.services.llm_client import generate_questions
+from backend.app.utils.pdf_utils import extract_text_from_pdf
+from backend.app.utils.text_chunker import chunk_text
+from backend.app.utils.image_fetcher import fetch_wikipedia_image
 
 router = APIRouter()
 
-
+# -----------------------------------------
+# SAFE JSON PARSER
+# -----------------------------------------
 def safe_json_loads(raw: str):
     if not raw or not raw.strip():
         raise ValueError("LLM returned empty response")
@@ -19,34 +23,96 @@ def safe_json_loads(raw: str):
     if raw.startswith("```"):
         raw = raw.split("```")[1]
 
+    # ✅ Try extracting JSON safely
     start = raw.find("[")
     end = raw.rfind("]")
 
-    if start == -1 or end == -1:
-        raise ValueError("No JSON array found in LLM response")
+    if start == -1:
+        raise ValueError("No JSON array found")
 
-    return json.loads(raw[start:end + 1])
+    if end == -1:
+        # 🔥 FIX: handle truncated JSON
+        raw = raw[start:] + "]"
+    else:
+        raw = raw[start:end + 1]
+
+    try:
+        return json.loads(raw)
+    except Exception:
+        # 🔥 fallback: try fixing quotes
+        raw = raw.replace("\n", " ")
+        raw = raw.replace("\t", " ")
+        return json.loads(raw)
+
+
+# -----------------------------------------
+# ATTACH IMAGE TO QUESTIONS
+# -----------------------------------------
+def attach_images(questions, topic=None):
+
+    print("\n===== ATTACH IMAGE DEBUG =====")
+
+    for q in questions:
+        entity = None
+
+        if topic:
+            entity = topic
+        elif "question" in q:
+            entity = " ".join(q["question"].split(" ")[0:3])
+
+        print("Trying entity:", entity)
+
+        if entity:
+            image_url = fetch_wikipedia_image(entity)
+
+            if image_url:
+                print("Image attached:", image_url)
+                q["image_url"] = image_url
+            else:
+                print("No image found")
+
+    print("===== ATTACH IMAGE DONE =====\n")
+
+    return questions
 
 
 # =================================================
-# TEXT / CONTENT / TOPIC
+# TEXT / CONTENT / TOPIC BASED GENERATION
 # =================================================
 @router.post("/generate-questions", response_model=QuestionResponse)
 def generate(req: QuestionRequest):
 
-    if not (req.topic or req.content or req.keywords):
-        raise HTTPException(400, "Input required")
+    # ✅ SAFE DEFAULTS
+    topic = req.topic or None
+    content = req.content or None
+    keywords = req.keywords or None
 
+    
+    num_questions = min(req.num_questions or 5, 5)  # ✅ limit to 5
+    difficulty = req.difficulty or "medium"
+    question_type = req.question_type or "descriptive"
+    include_images = req.include_images or False
+
+    # ✅ VALIDATION
+    if not (topic or content or keywords):
+        raise HTTPException(
+            status_code=400,
+            detail="Provide at least topic or content or keywords"
+        )
+
+    # ✅ BUILD PROMPT
     prompt = build_question_prompt(
-        num_questions=req.num_questions,
-        difficulty=req.difficulty,
-        topic=req.topic,
-        content=req.content,
-        keywords=req.keywords,
-        question_type=req.question_type
+        num_questions=num_questions,
+        difficulty=difficulty,
+        topic=topic,
+        content=content,
+        keywords=keywords,
+        question_type=question_type
     )
 
+    # ✅ CALL LLM
     raw = generate_questions(prompt)
+
     print("\n--- RAW LLM OUTPUT ---\n", raw, "\n---------------------\n")
 
     try:
@@ -57,29 +123,44 @@ def generate(req: QuestionRequest):
             detail=f"Failed to parse LLM output: {str(e)}"
         )
 
+    # ✅ OPTIONAL IMAGE ATTACHMENT
+    if include_images:
+        questions = attach_images(questions, topic=topic)
+
     return {"questions": questions}
 
 
-# PDF
+# =================================================
+# PDF BASED QUESTION GENERATION
+# =================================================
 @router.post("/generate-questions-from-pdf", response_model=QuestionResponse)
 async def generate_from_pdf(
     file: UploadFile = File(...),
     num_questions: int = 10,
     difficulty: str = "medium",
-    question_type: str = "descriptive"
+    question_type: str = "descriptive",
+    include_images: bool = False
 ):
 
     if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(400, "Only PDF files allowed")
+        raise HTTPException(
+            status_code=400,
+            detail="Only PDF files allowed"
+        )
 
+    # ✅ Extract text
     text = extract_text_from_pdf(await file.read())
-    #print("pdf chunks", text)
+
+    # ✅ Chunk text
     chunks = chunk_text(text)
 
     questions = []
+
+    # distribute questions across chunks
     per_chunk = max(1, num_questions // len(chunks))
 
     for chunk in chunks:
+
         prompt = build_question_prompt(
             num_questions=per_chunk,
             difficulty=difficulty,
@@ -88,15 +169,22 @@ async def generate_from_pdf(
         )
 
         raw = generate_questions(prompt)
+
         print("\n--- RAW LLM OUTPUT ---\n", raw, "\n---------------------\n")
 
         try:
             parsed = safe_json_loads(raw)
             questions.extend(parsed)
         except Exception:
-            continue  # skip bad chunk output safely
+            continue
 
         if len(questions) >= num_questions:
             break
 
-    return {"questions": questions[:num_questions]}
+    questions = questions[:num_questions]
+
+    # ✅ OPTIONAL IMAGE ATTACHMENT
+    if include_images:
+        questions = attach_images(questions)
+
+    return {"questions": questions}

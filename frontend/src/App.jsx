@@ -1,237 +1,78 @@
 import { useState } from "react";
-
-const BASE_URL = "https://resilience-final-sem-project.onrender.com";
+import Login from "./Login";
+import Signup from "./Signup";
+import COEDashboard from "./COEDashboard";
+import FacultyDashboard from "./FacultyDashboard";
 
 function App() {
-  const [inputMode, setInputMode] = useState("topic");
-  const [topic, setTopic] = useState("");
-  const [content, setContent] = useState("");
-  const [pdfFile, setPdfFile] = useState(null);
-  const [difficulty, setDifficulty] = useState("medium");
-  const [questionType, setQuestionType] = useState("descriptive");
-  const [numQuestions, setNumQuestions] = useState(5);
-  const [keywords, setKeywords] = useState("");
-  const [questions, setQuestions] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userRole, setUserRole] = useState(null);
+  const [selectedRole, setSelectedRole] = useState(null);
+  const [showSignup, setShowSignup] = useState(false);
 
-  const generateQuestions = async () => {
-    setLoading(true);
-
-    try {
-      let response;
-
-      if (inputMode === "pdf") {
-        const formData = new FormData();
-        formData.append("file", pdfFile);
-        formData.append("num_questions", numQuestions);
-        formData.append("difficulty", difficulty);
-        formData.append("question_type", questionType);
-
-        response = await fetch(
-          `${BASE_URL}/generate-questions-from-pdf`,
-          {
-            method: "POST",
-            body: formData,
-          }
-        );
-      } else {
-        response = await fetch(
-          `${BASE_URL}/generate-questions`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              topic: inputMode === "topic" ? topic : null,
-              content: inputMode === "content" ? content : null,
-              difficulty,
-              question_type: questionType,
-              num_questions: numQuestions,
-              keywords: keywords
-                ? keywords.split(",").map((k) => k.trim())
-                : null,
-            }),
-          }
-        );
-      }
-
-      const data = await response.json();
-      setQuestions(data.questions || []);
-    } catch (error) {
-      console.error("Error:", error);
-      alert("Something went wrong. Please try again.");
-    }
-
-    setLoading(false);
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setUserRole(null);
+    setSelectedRole(null);
+    localStorage.clear();
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-100 to-purple-200 p-10">
-      <div className="max-w-3xl mx-auto bg-white p-8 rounded-3xl shadow-2xl">
-        <h1 className="text-3xl font-bold text-gray-800 mb-6 text-center">
-          Intelligent Question Generator
-        </h1>
-
-        {/* INPUT MODE */}
-        <div className="mb-6">
-          <label className="block mb-2 font-semibold text-gray-700">
-            Input Mode
-          </label>
-
-          <div className="flex gap-3">
-            {["topic", "content", "pdf"].map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setInputMode(mode)}
-                className={`px-4 py-2 rounded-lg border transition-all duration-200 ${
-                  inputMode === mode
-                    ? "bg-indigo-600 text-white border-indigo-600 shadow-md"
-                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
-                }`}
-              >
-                {mode.toUpperCase()}
-              </button>
-            ))}
-          </div>
+  // ---------------- LANDING ----------------
+  if (!selectedRole) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-100">
+        <div className="flex gap-6 text-xl font-semibold">
+          <button onClick={() => setSelectedRole("superadmin")}>
+            SuperAdmin
+          </button>
+          <button onClick={() => setSelectedRole("coe")}>
+            COE
+          </button>
+          <button onClick={() => setSelectedRole("faculty")}>
+            Faculty
+          </button>
         </div>
+      </div>
+    );
+  }
 
-        {/* TOPIC */}
-        {inputMode === "topic" && (
-          <input
-            type="text"
-            placeholder="Enter topic"
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-            className="w-full p-3 border rounded-lg mb-4"
-          />
-        )}
+  // ---------------- LOGIN ----------------
+  if (!isLoggedIn) {
+    return showSignup ? (
+      <Signup setShowSignup={setShowSignup} />
+    ) : (
+      <Login
+        setIsLoggedIn={setIsLoggedIn}
+        setUserRole={setUserRole}
+        role={selectedRole} // ✅ important
+      />
+    );
+  }
 
-        {/* CONTENT */}
-        {inputMode === "content" && (
-          <textarea
-            placeholder="Paste study material..."
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            className="w-full p-3 border rounded-lg mb-4 h-40"
-          />
-        )}
+  // ---------------- DASHBOARDS ----------------
+  if (userRole === "coe") {
+    return <COEDashboard handleLogout={handleLogout} />;
+  }
 
-        {/* PDF */}
-        {inputMode === "pdf" && (
-          <input
-            type="file"
-            accept=".pdf"
-            onChange={(e) => setPdfFile(e.target.files[0])}
-            className="w-full p-3 border rounded-lg mb-4"
-          />
-        )}
+  if (userRole === "faculty") {
+    return <FacultyDashboard handleLogout={handleLogout} />;
+  }
 
-        {/* DIFFICULTY */}
-        <div className="mb-4">
-          <label className="block mb-1 font-semibold">Difficulty</label>
-          <div className="flex gap-2">
-            {["easy", "medium", "hard"].map((level) => (
-              <button
-                key={level}
-                onClick={() => setDifficulty(level)}
-                className={`px-4 py-2 rounded-lg border ${
-                  difficulty === level
-                    ? "bg-purple-600 text-white border-purple-600"
-                    : "bg-white text-gray-700 border-gray-300"
-                }`}
-              >
-                {level.toUpperCase()}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* QUESTION TYPE */}
-        <div className="mb-4">
-          <label className="block mb-1 font-semibold">Question Type</label>
-          <div className="flex gap-2">
-            {["descriptive", "mcq"].map((type) => (
-              <button
-                key={type}
-                onClick={() => setQuestionType(type)}
-                className={`px-4 py-2 rounded-lg border ${
-                  questionType === type
-                    ? "bg-indigo-600 text-white border-indigo-600"
-                    : "bg-white text-gray-700 border-gray-300"
-                }`}
-              >
-                {type.toUpperCase()}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* NUMBER */}
-        <div className="mb-4">
-          <label className="block mb-1 font-semibold">
-            Number of Questions
-          </label>
-          <input
-            type="number"
-            value={numQuestions}
-            onChange={(e) => setNumQuestions(Number(e.target.value))}
-            className="w-full p-3 border rounded-lg"
-          />
-        </div>
-
-        {/* KEYWORDS */}
-        {inputMode !== "pdf" && (
-          <input
-            type="text"
-            placeholder="Keywords (comma separated)"
-            value={keywords}
-            onChange={(e) => setKeywords(e.target.value)}
-            className="w-full p-3 border rounded-lg mb-4"
-          />
-        )}
-
-        {/* BUTTON */}
+  if (userRole === "superadmin") {
+    return (
+      <div className="p-10">
+        <h1 className="text-2xl font-bold">SuperAdmin Dashboard</h1>
         <button
-          onClick={generateQuestions}
-          className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 rounded-xl shadow-lg hover:scale-105 transition-all duration-200"
+          onClick={handleLogout}
+          className="mt-4 bg-red-500 text-white px-4 py-2 rounded"
         >
-          Generate Questions
+          Logout
         </button>
-
-        {loading && (
-          <p className="mt-4 text-indigo-600 font-semibold text-center">
-            Generating...
-          </p>
-        )}
       </div>
+    );
+  }
 
-      {/* RESULTS */}
-      <div className="max-w-3xl mx-auto mt-10">
-        {questions.map((q, index) => (
-          <div
-            key={index}
-            className="bg-white p-6 rounded-2xl shadow-md mb-4"
-          >
-            {questionType === "mcq" ? (
-              <>
-                <strong className="block mb-2">
-                  Q{index + 1}. {q.question}
-                </strong>
-                {q.options?.map((opt, i) => (
-                  <div key={i} className="ml-4">
-                    {String.fromCharCode(65 + i)}. {opt}
-                  </div>
-                ))}
-              </>
-            ) : (
-              <strong>
-                Q{index + 1}. {q.question}
-              </strong>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+  return <div>Something went wrong</div>;
 }
 
 export default App;
