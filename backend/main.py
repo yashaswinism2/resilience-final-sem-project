@@ -13,6 +13,10 @@ import backend.app.models
 import os
 from backend.app.api.dashboard_routes import router as dashboard_router
 from backend.app.api.question_paper_routes import router as paper_router
+from backend.app.models.notification_model import Notification
+from backend.app.api.notification_routes import router as notification_router
+
+
 
 
 # -------------------------------------------------
@@ -56,6 +60,7 @@ app.include_router(question_router)
 app.include_router(institute_router) 
 app.include_router(dashboard_router)
 app.include_router(paper_router)
+app.include_router(notification_router)
 
 # -------------------------------------------------
 # SERVE REACT FRONTEND (PRODUCTION BUILD)

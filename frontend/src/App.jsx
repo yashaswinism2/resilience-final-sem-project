@@ -1,14 +1,14 @@
 import { useState } from "react";
+import Landing from "./Landing";
 import Login from "./Login";
-import Signup from "./Signup";
 import COEDashboard from "./COEDashboard";
 import FacultyDashboard from "./FacultyDashboard";
+import SuperAdminSignup from "./SuperAdminSignup";
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userRole, setUserRole] = useState(null);
   const [selectedRole, setSelectedRole] = useState(null);
-  const [showSignup, setShowSignup] = useState(false);
 
   const handleLogout = () => {
     setIsLoggedIn(false);
@@ -19,32 +19,20 @@ function App() {
 
   // ---------------- LANDING ----------------
   if (!selectedRole) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-gray-100">
-        <div className="flex gap-6 text-xl font-semibold">
-          <button onClick={() => setSelectedRole("superadmin")}>
-            SuperAdmin
-          </button>
-          <button onClick={() => setSelectedRole("coe")}>
-            COE
-          </button>
-          <button onClick={() => setSelectedRole("faculty")}>
-            Faculty
-          </button>
-        </div>
-      </div>
-    );
+    return <Landing setSelectedRole={setSelectedRole} />;
   }
 
-  // ---------------- LOGIN ----------------
+  // ---------------- LOGIN / SIGNUP ----------------
   if (!isLoggedIn) {
-    return showSignup ? (
-      <Signup setShowSignup={setShowSignup} />
-    ) : (
+    if (selectedRole === "superadmin") {
+      return <SuperAdminSignup />;
+    }
+
+    return (
       <Login
         setIsLoggedIn={setIsLoggedIn}
         setUserRole={setUserRole}
-        role={selectedRole} // ✅ important
+        role={selectedRole}
       />
     );
   }
@@ -60,11 +48,14 @@ function App() {
 
   if (userRole === "superadmin") {
     return (
-      <div className="p-10">
-        <h1 className="text-2xl font-bold">SuperAdmin Dashboard</h1>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
+        <h1 className="text-2xl font-bold mb-4">
+          SuperAdmin Dashboard
+        </h1>
+
         <button
           onClick={handleLogout}
-          className="mt-4 bg-red-500 text-white px-4 py-2 rounded"
+          className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
         >
           Logout
         </button>
@@ -72,7 +63,7 @@ function App() {
     );
   }
 
-  return <div>Something went wrong</div>;
+  return <div>Something went wrong ❌</div>;
 }
 
 export default App;

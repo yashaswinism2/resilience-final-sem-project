@@ -15,7 +15,6 @@ export default function COEDashboard({ handleLogout }) {
     fetch(`${BASE_URL}/papers/institute/${instituteId}`)
       .then((res) => res.json())
       .then((data) => {
-        console.log("PAPERS DATA:", data); // 🔍 debug
         setPapers(data);
         setLoading(false);
       })
@@ -29,7 +28,7 @@ export default function COEDashboard({ handleLogout }) {
     fetchPapers();
   }, []);
 
-  // ---------------- APPROVE / REJECT ----------------
+  // ---------------- UPDATE STATUS ----------------
   const updateStatus = async (paperId, status) => {
     try {
       const res = await fetch(`${BASE_URL}/papers/${paperId}/status`, {
@@ -44,7 +43,7 @@ export default function COEDashboard({ handleLogout }) {
         alert(`Paper ${status} ✅`);
         fetchPapers();
       } else {
-        alert("Failed to update status ❌");
+        alert("Failed to update ❌");
       }
     } catch (err) {
       console.error(err);
@@ -52,34 +51,43 @@ export default function COEDashboard({ handleLogout }) {
     }
   };
 
-  // ---------------- SAFE PARSE ----------------
+  // ---------------- PARSE QUESTIONS ----------------
   const parseQuestions = (content) => {
     try {
-      // Case 1: already array
       if (Array.isArray(content)) return content;
-
-      // Case 2: JSON string
       if (typeof content === "string") return JSON.parse(content);
-
       return [];
-    } catch (e) {
-      console.error("Parse error:", e);
+    } catch {
       return [];
     }
   };
 
-  if (loading) return <p className="p-10">Loading...</p>;
+  // ---------------- STATUS COLOR ----------------
+  const getStatusStyle = (status) => {
+    if (status === "approved") return "bg-green-100 text-green-700";
+    if (status === "rejected") return "bg-red-100 text-red-700";
+    return "bg-yellow-100 text-yellow-700";
+  };
+
+  if (loading)
+    return (
+      <div className="p-10 text-center text-gray-600">
+        Loading papers...
+      </div>
+    );
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-100 to-purple-200 p-6">
 
       {/* HEADER */}
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">COE Dashboard</h1>
+        <h1 className="text-3xl font-bold text-gray-800">
+          COE Dashboard
+        </h1>
 
         <button
           onClick={handleLogout}
-          className="bg-red-500 text-white px-4 py-2 rounded"
+          className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
         >
           Logout
         </button>
@@ -87,7 +95,9 @@ export default function COEDashboard({ handleLogout }) {
 
       {/* NO DATA */}
       {papers.length === 0 ? (
-        <p>No question papers submitted yet</p>
+        <p className="text-center text-gray-600">
+          No question papers submitted yet
+        </p>
       ) : (
         papers.map((paper) => {
           const questions = parseQuestions(paper.content);
@@ -95,32 +105,33 @@ export default function COEDashboard({ handleLogout }) {
           return (
             <div
               key={paper.id}
-              className="bg-white p-5 mb-5 rounded-xl shadow"
+              className="bg-white p-6 mb-6 rounded-2xl shadow-lg"
             >
-              {/* STATUS */}
-              <p className="mb-2">
-                <strong>Status:</strong>{" "}
+              {/* TOP BAR */}
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-sm text-gray-500">
+                  Paper ID: {paper.id}
+                </span>
+
                 <span
-                  className={
-                    paper.status === "approved"
-                      ? "text-green-600 font-semibold"
-                      : paper.status === "rejected"
-                      ? "text-red-600 font-semibold"
-                      : "text-yellow-600 font-semibold"
-                  }
+                  className={`px-3 py-1 text-sm rounded-full font-semibold ${getStatusStyle(
+                    paper.status
+                  )}`}
                 >
                   {paper.status}
                 </span>
-              </p>
+              </div>
 
               {/* FACULTY */}
-              <p className="mb-3">
+              <p className="mb-3 text-gray-700">
                 <strong>Faculty ID:</strong> {paper.faculty_id}
               </p>
 
               {/* QUESTIONS */}
-              <div className="bg-gray-100 p-3 rounded mb-3">
-                <h3 className="font-semibold mb-2">Questions:</h3>
+              <div className="bg-gray-100 p-4 rounded-lg mb-4 max-h-60 overflow-y-auto">
+                <h3 className="font-semibold mb-2 text-gray-700">
+                  Questions
+                </h3>
 
                 {questions.length === 0 ? (
                   <p className="text-sm text-gray-500">
@@ -140,14 +151,14 @@ export default function COEDashboard({ handleLogout }) {
                 <div className="flex gap-3">
                   <button
                     onClick={() => updateStatus(paper.id, "approved")}
-                    className="bg-green-600 text-white px-4 py-2 rounded"
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg transition"
                   >
                     Approve
                   </button>
 
                   <button
                     onClick={() => updateStatus(paper.id, "rejected")}
-                    className="bg-red-600 text-white px-4 py-2 rounded"
+                    className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg transition"
                   >
                     Reject
                   </button>

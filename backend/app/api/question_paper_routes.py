@@ -67,9 +67,13 @@ from fastapi import HTTPException
 
 
 # ---------------- UPDATE STATUS (COE) ----------------
+from fastapi import HTTPException
+from backend.app.models.notification_model import Notification
+
 @router.put("/{paper_id}/status")
 def update_status(paper_id: int, data: dict, db: Session = Depends(get_db)):
 
+    # 🔍 Find paper
     paper = db.query(QuestionPaper).filter(
         QuestionPaper.id == paper_id
     ).first()
@@ -77,9 +81,31 @@ def update_status(paper_id: int, data: dict, db: Session = Depends(get_db)):
     if not paper:
         raise HTTPException(status_code=404, detail="Paper not found")
 
-    # ✅ update status
-    paper.status = data.get("status")
+    # ✅ Validate status
+    status = data.get("status")
+    if status not in ["approved", "rejected"]:
+        raise HTTPException(status_code=400, detail="Invalid status")
 
-    db.commit()
+    try:
+        # ✅ Update status
+        paper.status = status
 
-    return {"message": f"Paper {paper.status} successfully"}
+        # 🔔 Create notification
+        message = f"Your question paper (ID: {paper.id}) is {status}"
+
+        notification = Notification(
+            faculty_id=paper.faculty_id,
+            message=message
+        )
+
+        db.add(notification)
+
+        # ✅ Save changes
+        db.commit()
+        db.refresh(paper)
+
+        return {"message": f"Paper {status} successfully"}
+
+    except Exception as e:
+        db.rollback()
+        raise e
